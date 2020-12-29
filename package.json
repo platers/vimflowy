@@ -10,7 +10,7 @@
     "build": "ts-node src/server/build.ts",
     "buildserver": "ts-node src/server/build_server.ts",
     "lint": "tslint --exclude 'node_modules/**/*' '**/*.ts' '**/*.tsx'",
-    "start": "ts-node src/server/dev.ts",
+    "start": "ts-node src/server/dev.ts --port $PORT",
     "startprod": "ts-node src/server/prod.ts",
     "test": "mocha --opts test/mocha.opts",
     "watchtest": "mocha --opts test/mocha.opts --reporter dot --watch",
