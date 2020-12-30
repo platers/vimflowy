@@ -1,1 +1,0 @@
-web: ts-node src/server/prod.ts --port $PORT --host 0.0.0.0
