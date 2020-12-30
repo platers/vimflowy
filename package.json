@@ -34,7 +34,7 @@
     "startprod": "ts-node --compilerOptions '{\"module\":\"commonjs\"}' server/prod.ts",
     "typecheck": "tsc -p . --noEmit",
     "verify": "npm run lint && npm run typecheck && npm test",
-    "start": "react-scripts start",
+    "start": "PORT=$PORT react-scripts start",
     "build": "react-scripts build",
     "test": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\"}' mocha --opts test/mocha.opts",
     "watchtest": "npm test -- --reporter dot --watch",
