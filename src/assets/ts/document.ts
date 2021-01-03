@@ -221,16 +221,15 @@ export default class Document extends EventEmitter {
     this.root = Path.root();
     this.suffixarray = new SuffixArray();
     this.forceLoadSuffixArray();
-
     return this;
   }
 
   private async forceLoadSuffixArray() {
     const paths = this.traverseSubtree(this.root);
     for await (let path of paths) {
-      console.log('inserting record', await this.getText(path.row));
       this.suffixarray.insertRecord(new Record(path.row, await this.getText(path.row)));
     }
+    console.log('loaded suffix array');
   }
 
   public async _newChild(parent: Row, index = -1): Promise<AttachedChildInfo> {
@@ -257,6 +256,8 @@ export default class Document extends EventEmitter {
     ]);
 
     await this.updateCachedPluginData(row);
+
+    await this.suffixarray.insertRecord(new Record(row, await this.getText(row)));
     return info;
   }
 
@@ -329,8 +330,10 @@ export default class Document extends EventEmitter {
   }
 
   public async setLine(row: Row, line: Line) {
+    await this.suffixarray.deleteRecord(new Record(row, await this.getText(row)));
     this.cache.setLine(row, line);
     await this.store.setLine(row, line);
+    await this.suffixarray.insertRecord(new Record(row, line.join('')))
   }
 
   // get word at this location
@@ -759,11 +762,12 @@ export default class Document extends EventEmitter {
     const query_words =
       query.split(/\s/g).filter(x => x.length).map(canonicalize);
     console.log('suffix array size ', this.suffixarray.length());
-    const rows = this.suffixarray.query(query, nresults);
+    const rows = await this.suffixarray.query(query, nresults * 3); // get more results since some might be invalid
     for await (let row of rows) {
       const path = await this.canonicalPath(row);
       if (path == null) {
-        throw('Search returned invalid row');
+        console.log('Search returned row not in the document.');
+        continue;
       }
       if (!path.isDescendant(root)) {
         continue;

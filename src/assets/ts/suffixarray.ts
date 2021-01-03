@@ -214,11 +214,12 @@ export default class SuffixArray {
         return lastKey;
     }
 
-    public insertRecord = (record : Record) => {
+    public insertRecord = async (record : Record) => {
         this.applyToRecord(record, this.skiplist.insert);
+        console.log('insertRecord');
     }
 
-    public deleteRecord = (record : Record) => {
+    public deleteRecord = async (record : Record) => {
         this.applyToRecord(record, this.skiplist.delete);
     }
 
@@ -229,7 +230,7 @@ export default class SuffixArray {
         return this.match(pattern.next, key.next);
     }
 
-    public query = (pattern : string, num_results : number) => {
+    public query = async (pattern : string, num_results : number) => {
         const record = new Record(null, pattern);
         const patternKey = this.applyToRecord(record, () => {});
         const keys = this.skiplist.getNextKeys(patternKey, num_results);
