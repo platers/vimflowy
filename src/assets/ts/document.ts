@@ -12,6 +12,7 @@ import { InMemory } from '../../shared/data_backend';
 import {
   Row, Col, Char, Line, SerializedLine, SerializedBlock
 } from './types';
+import SuffixArray, { Record } from './suffixarray'
 
 type RowInfo = {
   readonly line: Line;
@@ -210,6 +211,7 @@ export default class Document extends EventEmitter {
   public store: DocumentStore;
   public name: string;
   public root: Path;
+  public suffixarray: SuffixArray;
 
   constructor(store: DocumentStore, name = '') {
     super();
@@ -217,9 +219,19 @@ export default class Document extends EventEmitter {
     this.store = store;
     this.name = name;
     this.root = Path.root();
+    this.suffixarray = new SuffixArray();
+    this.forceLoadSuffixArray();
+
     return this;
   }
 
+  private async forceLoadSuffixArray() {
+    const paths = this.traverseSubtree(this.root);
+    for await (let path of paths) {
+      console.log('inserting record', await this.getText(path.row));
+      this.suffixarray.insertRecord(new Record(path.row, await this.getText(path.row)));
+    }
+  }
 
   public async _newChild(parent: Row, index = -1): Promise<AttachedChildInfo> {
     const row = await this.store.getNew();
@@ -741,13 +753,21 @@ export default class Document extends EventEmitter {
     if (query.length === 0) {
       return results;
     }
+    console.time('query');
 
-    const canonicalize = (x: string) => case_sensitive ? x : x.toLowerCase();
+    const canonicalize = (x: string) => x.toLowerCase();
     const query_words =
       query.split(/\s/g).filter(x => x.length).map(canonicalize);
-
-    const paths = this.traverseSubtree(root);
-    for await (let path of paths) {
+    console.log('suffix array size ', this.suffixarray.length());
+    const rows = this.suffixarray.query(query, nresults);
+    for await (let row of rows) {
+      const path = await this.canonicalPath(row);
+      if (path == null) {
+        throw('Search returned invalid row');
+      }
+      if (!path.isDescendant(root)) {
+        continue;
+      }
       const text = await this.getText(path.row);
       const line = canonicalize(text);
       const matches: Array<number> = [];
@@ -765,6 +785,7 @@ export default class Document extends EventEmitter {
         break;
       }
     }
+    console.timeEnd('query');
     return results;
   }
 

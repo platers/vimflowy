@@ -36,7 +36,7 @@ class SkipListNode {
     }
 }
 
-export default class SkipList {
+class SkipList {
     private p : number;
     private maxLevel : number;
     private head : SkipListNode;
@@ -188,11 +188,11 @@ export class Record {
     public text : string;
     constructor (id : number | null, text : string) {
         this.id = id;
-        this.text = text;
+        this.text = text.toLocaleLowerCase();
     }
 }
 
-export class SuffixArray {
+export default class SuffixArray {
     private skiplist : SkipList;
     
     constructor () {
@@ -231,8 +231,7 @@ export class SuffixArray {
 
     public query = (pattern : string, num_results : number) => {
         const record = new Record(null, pattern);
-        const patternKey = this.applyToRecord(record, (key : Key) => {});
-        // console.log(patternKey);
+        const patternKey = this.applyToRecord(record, () => {});
         const keys = this.skiplist.getNextKeys(patternKey, num_results);
         const results = [];
         for (const key of keys) {
