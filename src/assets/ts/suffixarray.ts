@@ -105,6 +105,7 @@ export class SkipList {
         if (!this.isNil(x) && this.sameKey(x.key, key)) {
             return x;
         } else {
+            console.log(x, x.key, key);
             return null;
         }
     }
@@ -169,6 +170,7 @@ export class SkipList {
         let {x, update} = await this.lowerBound(key);
         if (!this.isNil(x) && this.sameKey(x.key, key)) {
             //overwrite existing?
+            console.log('Did not insert key since it already exists');
         } else {
             const lvl = this.randomLevel();
             x = await this.newNode(key);
@@ -187,7 +189,7 @@ export class SkipList {
         let {x, update} = await this.lowerBound(key);
         if (!this.isNil(x) && this.sameKey(x.key, key)) {
             for (let i = 0; i < this.maxLevel; i++) {
-                if (await this.getNode(update[i].forward[i]) != x) {
+                if (update[i].forward[i] != x.id) {
                     break;
                 } else {
                     update[i].forward[i] = x.forward[i];
@@ -262,6 +264,8 @@ export class SuffixArray {
     }
 
     public insertRecord = async (record : Record) => {
+        record.text = record.text.toLowerCase();
+        console.log('inserting', record.text);
         let lastNode = await this.skiplist.insert(this.getEndOfRecordKey(record.id));
         for (let i = record.text.length - 1; i >= 0; i--) {
             const key = new Key(record.text[i], record.id, i, lastNode.id);
@@ -270,12 +274,14 @@ export class SuffixArray {
     }
 
     public deleteRecord = async (record : Record) => {
+        record.text = record.text.toLowerCase();
+        console.log('deleting', record.text);
         const keys = [await this.getEndOfRecordKey(record.id)];
         // keys are in reverse order
         for (let i = record.text.length - 1; i >= 0; i--) {
             const node = await this.skiplist.getNodeFromKey(keys[keys.length - 1]);
             if (node == null) {
-                console.log("Could not find record to delete");
+                console.log("Could not find record to delete", i, keys[keys.length - 1]);
                 return;
             }
             const key = new Key(record.text[i], record.id, i, node.id);
@@ -295,6 +301,7 @@ export class SuffixArray {
     }
 
     public query = async (pattern : string, num_results : number) => {
+        pattern = pattern.toLowerCase();
         const keys = await this.skiplist.getNextKeys(pattern, num_results);
         const results = [];
         for (const key of keys) {

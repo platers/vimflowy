@@ -335,7 +335,7 @@ export default class Document extends EventEmitter {
     await this.suffixarray.deleteRecord(new Record(row, await this.getText(row)));
     this.cache.setLine(row, line);
     await this.store.setLine(row, line);
-    await this.suffixarray.insertRecord(new Record(row, line.join('')))
+    await this.suffixarray.insertRecord(new Record(row, line.join('')));
   }
 
   // get word at this location
