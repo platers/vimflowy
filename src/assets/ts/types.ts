@@ -38,3 +38,5 @@ export type Col = number;
 export type SerializedPath = Array<Row>;
 
 export type ModeId = string;
+
+export type SkipListNodeId = number;

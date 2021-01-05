@@ -7,12 +7,12 @@ import * as fn_utils from './utils/functional';
 // import logger from './utils/logger';
 import { isWhitespace } from './utils/text';
 import Path from './path';
-import { DocumentStore } from './datastore';
+import { DocumentStore, SkipListStore } from './datastore';
 import { InMemory } from '../../shared/data_backend';
 import {
   Row, Col, Char, Line, SerializedLine, SerializedBlock
 } from './types';
-import SuffixArray, { Record } from './suffixarray'
+import { Record, SuffixArray } from './suffixarray'
 
 type RowInfo = {
   readonly line: Line;
@@ -212,22 +212,24 @@ export default class Document extends EventEmitter {
   public name: string;
   public root: Path;
   public suffixarray: SuffixArray;
+  public skipStore: SkipListStore;
 
-  constructor(store: DocumentStore, name = '') {
+  constructor(store: DocumentStore, skipStore: SkipListStore, name = '') {
     super();
     this.cache = new DocumentCache();
     this.store = store;
+    this.skipStore = skipStore;
     this.name = name;
     this.root = Path.root();
-    this.suffixarray = new SuffixArray();
-    this.forceLoadSuffixArray();
+    this.suffixarray = new SuffixArray(this.skipStore);
     return this;
   }
 
-  private async forceLoadSuffixArray() {
+  public async forceLoadSuffixArray() {
     const paths = this.traverseSubtree(this.root);
     for await (let path of paths) {
-      this.suffixarray.insertRecord(new Record(path.row, await this.getText(path.row)));
+      await this.suffixarray.insertRecord(new Record(path.row, await this.getText(path.row)));
+      console.log('inserted record');
     }
     console.log('loaded suffix array');
   }
@@ -916,6 +918,7 @@ export default class Document extends EventEmitter {
 
 export class InMemoryDocument extends Document {
   constructor() {
-    super(new DocumentStore(new InMemory()));
+    const backend = new InMemory();
+    super(new DocumentStore(backend), new SkipListStore(backend));
   }
 }

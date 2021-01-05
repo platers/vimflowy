@@ -7,70 +7,138 @@ import * as fn_utils from './utils/functional';
 // import logger from './utils/logger';
 import { isWhitespace } from './utils/text';
 import Path from './path';
-import { DocumentStore } from './datastore';
+import { SkipListStore } from './datastore';
 import { InMemory } from '../../shared/data_backend';
 import {
-  Row, Col, Char, Line, SerializedLine, SerializedBlock
+  Row, Col, Char, Line, SerializedLine, SerializedBlock, SkipListNodeId
 } from './types';
 
-type Id = Row;
-type Value = null;
+const headNodeId = -1, tailNodeId = -2;
 
-class SkipListNode {
-    public forward : SkipListNode[];
+export class Key {
+    public char : Char;
+    public id : Row;
+    public col : number;
+    public next : SkipListNodeId | null; // id of skiplistnode storing the next suffix. null if end of record
+    constructor (char : Char, id : Row, col : number, next : SkipListNodeId | null) {
+        this.char = char;
+        this.id = id;
+        this.col = col;
+        this.next = next;
+    } 
+}
+
+export class SkipListNode {
+    public forward : SkipListNodeId[];
     public width : number[];
-    public key : Key | null;
-    public value : Value;
-    private nil : boolean;
+    public key : Key;
+    public id : number; //-1 reserved for head, -2 for tail
 
-    constructor (levels : number, key : Key | null, value : Value, nil : boolean = false) {
+    constructor (id : number, levels : number, key : Key) {
         this.key = key;
-        this.value = value;
-        this.nil = nil;
         this.forward = new Array(levels);
         this.width = new Array(levels);
-    }
-
-    public isNil = () => {
-        return this.nil;
+        this.id = id;
     }
 }
 
-class SkipList {
+export class SkipList {
+    private store: SkipListStore;
     private p : number;
     private maxLevel : number;
-    private head : SkipListNode;
-    private tail : SkipListNode;
     private size : number;
-    private compareKey : (a : Key | null, b : Key | null) => boolean;
-    private sameKey : (a : Key | null, b : Key | null) => boolean;
-    //private level : number;
 
-    constructor (p : number = 0.5, maxLevel : number = 10) {
+    constructor (store : SkipListStore, p : number = 0.5, maxLevel : number = 10) {
+        this.store = store;
         this.size = 0;
         this.p = p;
         this.maxLevel = maxLevel;
-        this.tail = new SkipListNode(this.maxLevel, null, null, true);
-        this.head = new SkipListNode(this.maxLevel, null, null);
-        this.compareKey = (a : Key | null, b : Key | null) => {
-            if (b == null) return false; //null when b is head
-            if (a == null) return true;
-            if (!a.next && a.id == null) return true; // end of search pattern
-            if (!b.next && b.id == null) return false; // end of search pattern
-            if (!a.next && !b.next) return a.id < b.id; // sort by id for delete
-            if (!a.next) return false; // end of key
-            if (!b.next) return true;
-            if (a.char != b.char) return a.char! < b.char!;
-            return this.compareKey(a.next, b.next);
+    }
+
+    private isHead = (x: SkipListNode | Key) => {
+        if (x instanceof SkipListNode) {
+            return x.key.id === headNodeId;
+        } else {
+            return x.id === headNodeId;
         }
-        this.sameKey = (a : Key | null, b : Key | null) => {
-            if (a == null && b == null) return true;
-            if (a == null || b == null) return false;
-            return a.id === b.id && a.col === b.col;
+    }
+
+    private isNil = (x: SkipListNode | Key) => {
+        if ('key' in x) {
+            return x.key.id == tailNodeId;
+        } else {
+            return x.id == tailNodeId;
         }
-        for (let i = 0; i < this.maxLevel; i++) {
-            this.head.forward[i] = this.tail;
-            this.head.width[i] = 1;
+    }
+
+    private compareKey = async (a : Key, b : Key) : Promise<boolean> => {
+        // return a < b
+        if (this.isHead(b)) return false; //null when b is head
+        if (this.isHead(a)) return true;
+        if (this.isNil(a)) return false;
+        if (this.isNil(b)) return true;
+
+        if (a.next == null && b.next == null) return a.id < b.id; // sort by id for delete
+        if (a.next == null) return false; // end of key 
+        if (b.next == null) return true; // end of key
+
+        if (a.char != b.char) return a.char < b.char;
+        return await this.compareKey((await this.getNode(a.next))!.key, (await this.getNode(b.next))!.key);
+    }
+    private sameKey = (a : Key, b : Key) => {
+        return a.id === b.id && a.col === b.col;
+    }
+    public getNode = (id : SkipListNodeId) => {
+        return this.store.getNode(id);
+    }
+
+    public getNodeFromKey = async (key : Key) => {
+        let x = await this.getHeadNode();
+        for (let i = this.maxLevel - 1; i >= 0; i--) {
+            let next = (await this.getNode(x.forward[i]))!;
+            while (!this.isNil(next) && await this.compareKey(next.key, key)) {
+                x = next;
+                next = (await this.getNode(x.forward[i]))!;
+            }
+        }
+        x = (await this.getNode(x.forward[0]))!;
+        if (!this.isNil(x) && this.sameKey(x.key, key)) {
+            return x;
+        } else {
+            return null;
+        }
+    }
+
+    private newNode = async (key : Key, id? : SkipListNodeId) => {
+        if (id == null) {
+            id = await this.store.getId();
+        }
+        const node = new SkipListNode(id, this.maxLevel, key);
+        await this.store.setNode(node);
+        return node;
+    }
+
+    private getHeadNode = async () => {
+        let result = await this.store.getNode(headNodeId);
+        if (result) {
+            return result;
+        } else {
+            const tail = await this.getTailNode();
+            result = await this.newNode(new Key('', -1, -1, null), headNodeId);
+            for (let i = 0; i < this.maxLevel; i++) {
+                result.forward[i] = tail.id;
+            }
+            await this.store.setNode(result);
+            return result;
+        }
+    }
+
+    private getTailNode = async () => {
+        const result = await this.store.getNode(tailNodeId);
+        if (result) {
+            return result;
+        } else {
+            return await this.newNode(new Key('', tailNodeId, -2, null), tailNodeId);
         }
     }
 
@@ -82,45 +150,48 @@ class SkipList {
         return lvl;
     }
 
-    public insert = (key : Key, value : Value = null) => {
+    private lowerBound = async (key : Key) => {
         let update : SkipListNode[] = new Array(this.maxLevel);
-        let x = this.head;
+        let x = await this.getHeadNode();
         for (let i = this.maxLevel - 1; i >= 0; i--) {
-            while (!x.forward[i].isNil() && this.compareKey(x.forward[i].key, key)) {
-                x = x.forward[i];
+            let next = (await this.getNode(x.forward[i]))!;
+            while (!this.isNil(next) && await this.compareKey(next.key, key)) {
+                x = next;
+                next = (await this.getNode(x.forward[i]))!;
             }
             update[i] = x;
         }
-        x = x.forward[0];
-        if (!x.isNil && this.sameKey(x.key, key)) {
-            x.value = value;
+        x = (await this.getNode(x.forward[0]))!;
+        return {x, update};
+    }
+
+    public insert = async (key : Key) => {
+        let {x, update} = await this.lowerBound(key);
+        if (!this.isNil(x) && this.sameKey(x.key, key)) {
+            //overwrite existing?
         } else {
             const lvl = this.randomLevel();
-            x = new SkipListNode(this.maxLevel, key, value);
+            x = await this.newNode(key);
             for (let i = 0; i < lvl; i++) {
                 x.forward[i] = update[i].forward[i];
-                update[i].forward[i] = x;
+                await this.store.setNode(x);
+                update[i].forward[i] = x.id;
+                await this.store.setNode(update[i]);
             }
             this.size++;
         }
+        return x;
     }
 
-    public delete = (key : Key) => {
-        let update : SkipListNode[] = new Array(this.maxLevel);
-        let x = this.head;
-        for (let i = this.maxLevel - 1; i >= 0; i--) {
-            while (!x.forward[i].isNil() && this.compareKey(x.forward[i].key, key)) {
-                x = x.forward[i];
-            }
-            update[i] = x;
-        }
-        x = x.forward[0];
-        if (!x.isNil() && this.sameKey(x.key, key)) {
+    public delete = async (key : Key) => {
+        let {x, update} = await this.lowerBound(key);
+        if (!this.isNil(x) && this.sameKey(x.key, key)) {
             for (let i = 0; i < this.maxLevel; i++) {
-                if (update[i].forward[i] != x) {
+                if (await this.getNode(update[i].forward[i]) != x) {
                     break;
                 } else {
                     update[i].forward[i] = x.forward[i];
+                    await this.store.setNode(update[i]);
                 }
             }
             this.size--;
@@ -129,114 +200,105 @@ class SkipList {
         }
     }
 
-    private getNodeBefore = (key : Key) => {
-        let x = this.head;
-        for (let i = this.maxLevel - 1; i >= 0; i--) {
-            while (!x.forward[i].isNil() && this.compareKey(x.forward[i].key, key)) {
-                x = x.forward[i];
-            }
-        }
-        return x;
-    }
+    private compareKeyString = async (a : Key, b : string) : Promise<boolean> => {
+        // return a < b
+        if (b.length == 0) return false; // end of pattern
+        if (this.isHead(a)) return true;
+        if (this.isNil(a)) return false;
 
-    public getValue = (key : Key) => {
-        let x = this.getNodeBefore(key);
-        x = x.forward[0];
-        if (this.sameKey(x.key, key)) {
-            return x.value;
-        } else {
-            return null;
-        }
+        if (a.next == null) return false; // end of key 
+
+        if (a.char != b[0]) return a.char < b[0];
+        return await this.compareKeyString((await this.getNode(a.next))!.key, b.slice(1));
     }
 
     public length = () => {
         return this.size;
     }
 
-    // Get up to num_results unique ids that might match key
-    public getNextKeys = (key : Key, num_results : number) => {
-        let x = this.getNodeBefore(key);
-        x = x.forward[0];
+    // Get up to num_results unique ids that might match query
+    public getNextKeys = async (query : string, num_results : number) => {
+        let x = await this.getHeadNode();
+        for (let i = this.maxLevel - 1; i >= 0; i--) {
+            let next = (await this.getNode(x.forward[i]))!;
+            while (!this.isNil(next) && await this.compareKeyString(next.key, query)) {
+                x = next;
+                next = (await this.getNode(x.forward[i]))!;
+            }
+        }
+        x = (await this.getNode(x.forward[0]))!;
         const ids = new Set();
         const results = [];
-        while (!x.isNil() && ids.size < num_results) {
-            if (!ids.has(x.key!.id)) {
-                ids.add(x.key!);
-                results.push(x.key!);
+        while (!this.isNil(x) && ids.size < num_results) {
+            if (!ids.has(x.key.id)) {
+                ids.add(x.key.id);
+                results.push(x.key);
             }
-            x = x.forward[0];
+            x = (await this.getNode(x.forward[0]))!;
         }
         return results;
     }
 }
-
-class Key {
-    public char : Char | null;
-    public id : Id;
-    public col : number | null;
-    public next : Key | null; //null if end of record
-    constructor (char : Char | null, id : Id, col : number | null, next : Key | null) {
-        this.char = char;
-        this.id = id;
-        this.col = col;
-        this.next = next;
-    } 
-}
-
 export class Record {
-    public id : Id | null;
+    public id : Row;
     public text : string;
-    constructor (id : number | null, text : string) {
+    constructor (id : number, text : string) {
         this.id = id;
-        this.text = text.toLocaleLowerCase();
+        this.text = text;
     }
 }
 
-export default class SuffixArray {
+export class SuffixArray {
     private skiplist : SkipList;
+    private store: SkipListStore;
     
-    constructor () {
-        this.skiplist = new SkipList(0.5, 30);
+    constructor (store: SkipListStore) {
+        this.store = store;
+        this.skiplist = new SkipList(this.store, 0.5, 30);
     }
     
-    private getEndOfRecordKey = (id : Id) => {
-        return new Key(null, id, null, null);
-    }
-
-    private applyToRecord = (record : Record, f : (key : Key) => void) => {
-        let lastKey = this.getEndOfRecordKey(record.id!);
-        f(lastKey);
-        for (let i = record.text.length - 1; i >= 0; i--) {
-            const key = new Key(record.text[i], record.id!, i, lastKey);
-            f(key);
-            lastKey = key;
-        }
-        return lastKey;
+    private getEndOfRecordKey = (id : Row) => {
+        return new Key('', id, -1, null);
     }
 
     public insertRecord = async (record : Record) => {
-        this.applyToRecord(record, this.skiplist.insert);
-        console.log('insertRecord');
+        let lastNode = await this.skiplist.insert(this.getEndOfRecordKey(record.id));
+        for (let i = record.text.length - 1; i >= 0; i--) {
+            const key = new Key(record.text[i], record.id, i, lastNode.id);
+            lastNode = await this.skiplist.insert(key);
+        }
     }
 
     public deleteRecord = async (record : Record) => {
-        this.applyToRecord(record, this.skiplist.delete);
+        const keys = [await this.getEndOfRecordKey(record.id)];
+        // keys are in reverse order
+        for (let i = record.text.length - 1; i >= 0; i--) {
+            const node = await this.skiplist.getNodeFromKey(keys[keys.length - 1]);
+            if (node == null) {
+                console.log("Could not find record to delete");
+                return;
+            }
+            const key = new Key(record.text[i], record.id, i, node.id);
+            keys.push(key);
+        }
+        // must delete nodes front to back
+        for (let i = keys.length - 1; i >= 0; i--) {
+            this.skiplist.delete(keys[i]);
+        }
     }
 
-    private match = (pattern : Key, key : Key) : boolean => {
-        if (!pattern.next) return true;
-        if (!key.next) return false;
-        if (pattern.char != key.char) return false;
-        return this.match(pattern.next, key.next);
+    private match = async (pattern : string, key : Key) : Promise<boolean> => {
+        if (pattern.length == 0) return true;
+        if (key.next == null) return false; // key is end of record
+        if (pattern[0] != key.char) return false;
+        return await this.match(pattern.slice(1), (await this.skiplist.getNode(key.next))!.key);
     }
 
     public query = async (pattern : string, num_results : number) => {
-        const record = new Record(null, pattern);
-        const patternKey = this.applyToRecord(record, () => {});
-        const keys = this.skiplist.getNextKeys(patternKey, num_results);
+        const keys = await this.skiplist.getNextKeys(pattern, num_results);
         const results = [];
         for (const key of keys) {
-            if (this.match(patternKey, key)) {
+            if (await this.match(pattern, key)) {
                 results.push(key.id);
             } else { // matching suffixes are consecutive
                 break;

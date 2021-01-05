@@ -5,7 +5,9 @@ import DataBackend, { SynchronousDataBackend } from '../../shared/data_backend';
 import * as ClientDataBackends from './data_backend';
 import { Theme, defaultTheme } from './themes';
 
-import { Row, Line, SerializedPath, MacroMap } from './types';
+import { Row, Line, SerializedPath, MacroMap, SkipListNodeId } from './types';
+import { Key, SkipListNode } from './suffixarray'
+import { trim } from 'jquery';
 
 /*
 DataStore abstracts the data layer, so that it can be swapped out.
@@ -203,6 +205,88 @@ const decodeParents = (parents: number | Array<number>): Array<number> => {
   }
   return parents;
 };
+
+export class SkipListStore {
+  private lastId: number | null;
+  private prefix: string;
+  private docname: string;
+  private cache: {[key: string]: any} = {};
+  private use_cache: boolean = true;
+  public events: EventEmitter = new EventEmitter();
+  private backend: DataBackend;
+
+  constructor(backend: DataBackend, docname = '') {
+    this.backend = backend;
+    this.docname = docname;
+    this.prefix = `${this.docname}skiplist`;
+    this.lastId = null;
+  }
+
+  private async _get<T>(key: string, default_value: T): Promise<T> {
+    if (this.use_cache) {
+      if (key in this.cache) {
+        return this.cache[key];
+      }
+    }
+    let value: any = await this.backend.get(key);
+    try {
+      value = JSON.parse(value);
+    } catch (e) { /* do nothing - this shouldn't happen */ }
+    if (value === null) {
+      value = default_value;
+      logger.debug('tried getting', key, 'defaulted to', default_value);
+    } else {
+      logger.debug('got from storage', key, value);
+    }
+    if (this.use_cache) {
+      this.cache[key] = value;
+    }
+    return value;
+  }
+
+  private async _set(key: string, value: any): Promise<void> {
+    if (this.use_cache) {
+      this.cache[key] = value;
+    }
+    logger.debug('setting to storage', key, value);
+    await this.backend.set(key, JSON.stringify(value));
+  }
+
+  private _lastIDKey_() {
+    return `${this.prefix}:lastID`;
+  }
+
+  private _skipNodeKey_(id: SkipListNodeId): string {
+    return `${this.prefix}:${id}:node`;
+  }
+
+  public async setNode(node: SkipListNode) {
+    await this._set(this._skipNodeKey_(node.id), node);
+  }
+
+  public async getNode(id: SkipListNodeId): Promise<SkipListNode | null> {
+    const result = await this._get(this._skipNodeKey_(id), new SkipListNode(-100, 0, new Key('', -100, -1, null)));
+    if (result.id === -100) {
+      return null;
+    } else {
+      return result;
+    }
+  }
+
+  public async getId(): Promise<SkipListNodeId>{
+    let id;
+    if (this.lastId === null) {
+      id = 1 + await this._get(this._lastIDKey_(), 0);
+    } else {
+      id = this.lastId + 1;
+    }
+    // NOTE: fire and forget
+    this._set(this._lastIDKey_(), id);
+    this.lastId = id;
+    return id;
+  }
+
+}
 
 export class DocumentStore {
   private lastId: number | null;

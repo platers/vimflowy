@@ -27,7 +27,7 @@ import { RegisterTypes } from './register';
 import KeyEmitter from './keyEmitter';
 import KeyHandler from './keyHandler';
 import KeyMappings from './keyMappings';
-import { ClientStore, DocumentStore } from './datastore';
+import { ClientStore, DocumentStore, SkipListStore } from './datastore';
 import { SynchronousInMemory, InMemory } from '../../shared/data_backend';
 import {
   BackendType, SynchronousLocalStorageBackend,
@@ -101,6 +101,7 @@ $(document).ready(async () => {
   let clientStore: ClientStore;
   let docStore: DocumentStore;
   let backend_type: BackendType;
+  let skipStore: SkipListStore;
   let doc;
 
   // TODO: consider using modernizr for feature detection
@@ -120,11 +121,13 @@ $(document).ready(async () => {
 
   const config: Config = vimConfig;
 
-  function getLocalStore(): DocumentStore {
-     return new DocumentStore(new LocalStorageBackend(docname), docname);
+  function getLocalStore(): { docStore: DocumentStore; skipStore: SkipListStore } {
+    const backend = new LocalStorageBackend(docname);
+     return { docStore: new DocumentStore(backend, docname), 
+      skipStore: new SkipListStore(backend, docname) };
   }
 
-  async function getFirebaseStore(): Promise<DocumentStore> {
+  async function getFirebaseStore(): Promise<{ docStore: DocumentStore; skipStore: SkipListStore }> {
     const firebaseId = clientStore.getDocSetting('firebaseId');
     const firebaseApiKey = clientStore.getDocSetting('firebaseApiKey');
     const firebaseUserEmail = clientStore.getDocSetting('firebaseUserEmail');
@@ -138,13 +141,14 @@ $(document).ready(async () => {
     }
     const fb_backend = new FirebaseBackend(docname, firebaseId, firebaseApiKey);
     const dStore = new DocumentStore(fb_backend, docname);
+    const sStore = new SkipListStore(fb_backend, docname);
     await fb_backend.init(firebaseUserEmail || '', firebaseUserPassword || '');
 
     logger.info(`Successfully initialized firebase connection: ${firebaseId}`);
-    return dStore;
+    return { docStore: dStore, skipStore: sStore };
   }
 
-  async function getSocketServerStore(): Promise<DocumentStore> {
+  async function getSocketServerStore(): Promise<{ docStore: DocumentStore; skipStore: SkipListStore }> {
     let socketServerHost;
     let socketServerDocument;
     let socketServerPassword;
@@ -165,6 +169,7 @@ $(document).ready(async () => {
     // NOTE: we don't pass docname to DocumentStore since we want keys
     // to not have prefixes
     const dStore = new DocumentStore(socket_backend);
+    const sStore = new SkipListStore(socket_backend);
     while (true) {
       try {
         await socket_backend.init(
@@ -184,12 +189,12 @@ $(document).ready(async () => {
     }
     clientStore.setDocSetting('socketServerPassword', socketServerPassword);
     logger.info(`Successfully initialized socked connection: ${socketServerHost}`);
-    return dStore;
+    return { docStore: dStore, skipStore: sStore };
   }
 
   if (backend_type === 'firebase') {
     try {
-      docStore = await getFirebaseStore();
+      ({docStore, skipStore} = await getFirebaseStore());
     } catch (e) {
       alert(`
         Error loading firebase datastore:
@@ -201,14 +206,16 @@ $(document).ready(async () => {
         Falling back to localStorage default.
       `);
 
-      docStore = getLocalStore();
+      ({docStore, skipStore} = getLocalStore());
       backend_type = 'local';
     }
   } else if (backend_type === 'inmemory') {
-    docStore = new DocumentStore(new InMemory());
+    const backend = new InMemory();
+    docStore = new DocumentStore(backend);
+    skipStore = new SkipListStore(backend);
   } else if (backend_type === 'socketserver') {
     try {
-      docStore = await getSocketServerStore();
+      ({docStore, skipStore} = await getSocketServerStore());
     } catch (e) {
       alert(`
         Error loading socket server datastore:
@@ -221,15 +228,15 @@ $(document).ready(async () => {
       `);
 
       clientStore.setDocSetting('socketServerPassword', '');
-      docStore = getLocalStore();
+      ({docStore, skipStore} = getLocalStore());
       backend_type = 'local';
     }
   } else {
-    docStore = getLocalStore();
+    ({docStore, skipStore} = getLocalStore());
     backend_type = 'local';
   }
 
-  doc = new Document(docStore, docname);
+  doc = new Document(docStore, skipStore, docname);
 
   let to_load: any = null;
   if ((await docStore.getChildren(Path.rootRow())).length === 0) {
@@ -342,6 +349,7 @@ $(document).ready(async () => {
   // load data
   if (to_load !== null) {
     await doc.load(to_load);
+    await doc.forceLoadSuffixArray();
     // a bit hacky.  without this, you can undo initial marks, for example
     session.cursor.setPosition(
       (await doc.getChildren(viewRoot))[0], 0

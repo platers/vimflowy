@@ -9,6 +9,7 @@ async function start_search(searchRoot: Path, session: Session) {
   await session.setMode('SEARCH');
   session.menu = new Menu(async (text) => {
     const results = await session.document.search(searchRoot, text);
+    console.log('search results', results);
     return Promise.all(
       results.map(async ({ path, matches }) => {
         const accents: {[column: number]: boolean} = {};
