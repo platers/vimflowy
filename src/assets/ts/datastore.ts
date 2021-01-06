@@ -6,7 +6,7 @@ import * as ClientDataBackends from './data_backend';
 import { Theme, defaultTheme } from './themes';
 
 import { Row, Line, SerializedPath, MacroMap, SkipListNodeId } from './types';
-import { Key, SkipListNode } from './suffixarray'
+import { Key, SkipListNode } from './suffixarray';
 import { trim } from 'jquery';
 
 /*
@@ -214,12 +214,14 @@ export class SkipListStore {
   private use_cache: boolean = true;
   public events: EventEmitter = new EventEmitter();
   private backend: DataBackend;
+  private lastRow: number | null;
 
   constructor(backend: DataBackend, docname = '') {
     this.backend = backend;
     this.docname = docname;
     this.prefix = `${this.docname}skiplist`;
     this.lastId = null;
+    this.lastRow = null;
   }
 
   private async _get<T>(key: string, default_value: T): Promise<T> {
@@ -256,12 +258,24 @@ export class SkipListStore {
     return `${this.prefix}:lastID`;
   }
 
+  private _lastRowKey_() {
+    return `${this.prefix}:lastRow`;
+  }
+
   private _skipNodeKey_(id: SkipListNodeId): string {
     return `${this.prefix}:${id}:node`;
   }
 
   public async setNode(node: SkipListNode) {
     await this._set(this._skipNodeKey_(node.id), node);
+  }
+
+  public async setLastRow(row: Row) {
+    await this._set(this._lastRowKey_(), row);
+  }
+
+  public async getLastRow() {
+    return await this._get(this._lastRowKey_(), -1);
   }
 
   public async getNode(id: SkipListNodeId): Promise<SkipListNode | null> {
@@ -452,13 +466,17 @@ export class DocumentStore {
     return await this._get(this._pluginDataKey_(plugin, key), default_value);
   }
 
+  public async getLastId(): Promise<number> {
+    return await this._get(this._lastIDKey_(), 0);
+  }
+
   // get next row ID
   // public so test case can override
-  public async getId(): Promise<number> {
+  public async getNewId(): Promise<number> {
     // suggest to override this for efficiency
     let id;
     if (this.lastId === null) {
-      id = 1 + await this._get(this._lastIDKey_(), 0);
+      id = 1 + await this.getLastId();
     } else {
       id = this.lastId + 1;
     }
@@ -469,7 +487,7 @@ export class DocumentStore {
   }
 
   public async getNew() {
-    const id = await this.getId();
+    const id = await this.getNewId();
     await Promise.all([
       this.setLine(id, []),
       this.setChildren(id, []),

@@ -123,7 +123,7 @@ $(document).ready(async () => {
 
   function getLocalStore(): { docStore: DocumentStore; skipStore: SkipListStore } {
     const backend = new LocalStorageBackend(docname);
-     return { docStore: new DocumentStore(backend, docname), 
+    return { docStore: new DocumentStore(backend, docname),
       skipStore: new SkipListStore(backend, docname) };
   }
 

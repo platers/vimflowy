@@ -25,7 +25,7 @@ export class Key {
         this.id = id;
         this.col = col;
         this.next = next;
-    } 
+    }
 }
 
 export class SkipListNode {
@@ -77,7 +77,7 @@ export class SkipList {
         if (this.isNil(b)) return true;
 
         if (a.next == null && b.next == null) return a.id < b.id; // sort by id for delete
-        if (a.next == null) return false; // end of key 
+        if (a.next == null) return false; // end of key
         if (b.next == null) return true; // end of key
 
         if (a.char != b.char) return a.char < b.char;
@@ -206,7 +206,7 @@ export class SkipList {
         if (this.isHead(a)) return true;
         if (this.isNil(a)) return false;
 
-        if (a.next == null) return false; // end of key 
+        if (a.next == null) return false; // end of key
 
         if (a.char != b[0]) return a.char < b[0];
         return await this.compareKeyString((await this.getNode(a.next))!.key, b.slice(1));
@@ -250,13 +250,13 @@ export class Record {
 
 export class SuffixArray {
     private skiplist : SkipList;
-    private store: SkipListStore;
-    
+    public store: SkipListStore;
+
     constructor (store: SkipListStore) {
         this.store = store;
         this.skiplist = new SkipList(this.store, 0.5, 30);
     }
-    
+
     private getEndOfRecordKey = (id : Row) => {
         return new Key('', id, -1, null);
     }
@@ -279,7 +279,7 @@ export class SuffixArray {
         for (let i = record.text.length - 1; i >= 0; i--) {
             const node = await this.skiplist.getNodeFromKey(keys[keys.length - 1]);
             if (node == null) {
-                console.log("Could not find record to delete", i, keys[keys.length - 1]);
+                console.log('Could not find record to delete', i, keys[keys.length - 1]);
                 return;
             }
             const key = new Key(record.text[i], record.id, i, node.id);
@@ -309,7 +309,7 @@ export class SuffixArray {
                 break;
             }
         }
-        return results; 
+        return results;
     }
 
     public length = () => {

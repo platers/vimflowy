@@ -12,7 +12,7 @@ import { InMemory } from '../../shared/data_backend';
 import {
   Row, Col, Char, Line, SerializedLine, SerializedBlock
 } from './types';
-import { Record, SuffixArray } from './suffixarray'
+import { Record, SuffixArray } from './suffixarray';
 
 type RowInfo = {
   readonly line: Line;
@@ -222,15 +222,17 @@ export default class Document extends EventEmitter {
     this.name = name;
     this.root = Path.root();
     this.suffixarray = new SuffixArray(this.skipStore);
-    this.forceLoadSuffixArray();
+    this.loadSuffixArray();
     return this;
   }
 
-  public async forceLoadSuffixArray() {
-    const paths = this.traverseSubtree(this.root);
-    for await (let path of paths) {
-      await this.suffixarray.insertRecord(new Record(path.row, await this.getText(path.row)));
-      console.log('inserted record');
+  public async loadSuffixArray() {
+    const lastRow = await this.store.getLastId();
+    const lastRowInserted = await this.suffixarray.store.getLastRow();
+    for (let row = lastRowInserted + 1; row <= lastRow; row++) {
+      await this.suffixarray.insertRecord(new Record(row, await this.getText(row)));
+      this.suffixarray.store.setLastRow(row);
+      console.log('inserted record', row, 'of', lastRow);
     }
     console.log('loaded suffix array');
   }
