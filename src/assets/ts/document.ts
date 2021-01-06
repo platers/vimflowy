@@ -222,6 +222,7 @@ export default class Document extends EventEmitter {
     this.name = name;
     this.root = Path.root();
     this.suffixarray = new SuffixArray(this.skipStore);
+    this.forceLoadSuffixArray();
     return this;
   }
 

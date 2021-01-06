@@ -30,14 +30,12 @@ export class Key {
 
 export class SkipListNode {
     public forward : SkipListNodeId[];
-    public width : number[];
     public key : Key;
     public id : number; //-1 reserved for head, -2 for tail
 
-    constructor (id : number, levels : number, key : Key) {
+    constructor (id : number, key : Key) {
         this.key = key;
-        this.forward = new Array(levels);
-        this.width = new Array(levels);
+        this.forward = new Array();
         this.id = id;
     }
 }
@@ -114,7 +112,7 @@ export class SkipList {
         if (id == null) {
             id = await this.store.getId();
         }
-        const node = new SkipListNode(id, this.maxLevel, key);
+        const node = new SkipListNode(id, key);
         await this.store.setNode(node);
         return node;
     }
@@ -127,7 +125,7 @@ export class SkipList {
             const tail = await this.getTailNode();
             result = await this.newNode(new Key('', -1, -1, null), headNodeId);
             for (let i = 0; i < this.maxLevel; i++) {
-                result.forward[i] = tail.id;
+                result.forward.push(tail.id);
             }
             await this.store.setNode(result);
             return result;
@@ -175,7 +173,7 @@ export class SkipList {
             const lvl = this.randomLevel();
             x = await this.newNode(key);
             for (let i = 0; i < lvl; i++) {
-                x.forward[i] = update[i].forward[i];
+                x.forward.push(update[i].forward[i]);
                 await this.store.setNode(x);
                 update[i].forward[i] = x.id;
                 await this.store.setNode(update[i]);
@@ -188,7 +186,7 @@ export class SkipList {
     public delete = async (key : Key) => {
         let {x, update} = await this.lowerBound(key);
         if (!this.isNil(x) && this.sameKey(x.key, key)) {
-            for (let i = 0; i < this.maxLevel; i++) {
+            for (let i = 0; i < x.forward.length; i++) {
                 if (update[i].forward[i] != x.id) {
                     break;
                 } else {
@@ -265,7 +263,7 @@ export class SuffixArray {
 
     public insertRecord = async (record : Record) => {
         record.text = record.text.toLowerCase();
-        console.log('inserting', record.text);
+        //console.log('inserting', record.text);
         let lastNode = await this.skiplist.insert(this.getEndOfRecordKey(record.id));
         for (let i = record.text.length - 1; i >= 0; i--) {
             const key = new Key(record.text[i], record.id, i, lastNode.id);
