@@ -287,7 +287,7 @@ export class SkipListStore {
     }
   }
 
-  public async getId(): Promise<SkipListNodeId>{
+  public async getId(): Promise<SkipListNodeId> {
     let id;
     if (this.lastId === null) {
       id = 1 + await this._get(this._lastIDKey_(), 0);

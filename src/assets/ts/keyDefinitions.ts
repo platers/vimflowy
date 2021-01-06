@@ -32,7 +32,7 @@ export enum SequenceAction {
   DROP,
   DROP_ALL,
   KEEP,
-};
+}
 export type ActionContext = {
   mode: ModeId;
   session: Session;

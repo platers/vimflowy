@@ -100,7 +100,7 @@ export default class Mode {
     return [key, context];
   }
 
-};
+}
 
 // mapping from mode name to the actual mode object
 export const MODES: {[key: string]: Mode} = {};

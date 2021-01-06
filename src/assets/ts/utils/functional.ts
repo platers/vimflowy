@@ -52,7 +52,7 @@ export function promiseDebounce(fn: (...args: Array<any>) => Promise<void>) {
       pending = true;
     }
   };
-};
+}
 
 export async function timeout(ns: number) {
   await new Promise((resolve) => setTimeout(resolve, ns));

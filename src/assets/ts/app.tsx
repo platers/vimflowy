@@ -356,7 +356,7 @@ $(document).ready(async () => {
     session.reset_history();
     session.reset_jump_history();
     await renderMain();
-    //doc.forceLoadSuffixArray();
+    // doc.forceLoadSuffixArray();
   }
 
   const keyHandler = new KeyHandler(session, keyBindings);

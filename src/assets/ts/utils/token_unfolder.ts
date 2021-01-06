@@ -143,7 +143,7 @@ export function RegexTokenizerSplitter<T = React.ReactNode>(
       emit(...wrapped.unfold(token));
     }
   });
-};
+}
 
 // captures first group of regex and allows modifying the tokens
 export function RegexTokenizerModifier<T = React.ReactNode>(
@@ -167,7 +167,7 @@ export function RegexTokenizerModifier<T = React.ReactNode>(
 
     emit(...wrapped.unfold(token));
   });
-};
+}
 
 const hiddenClass = 'hidden';
 
