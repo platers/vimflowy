@@ -87,8 +87,10 @@ export class FirebaseBackend extends DataBackend {
     this.fbase = firebase.initializeApp({
       apiKey: apiKey,
       databaseURL: `https://${dbName}.firebaseio.com`,
+      projectId: dbName,
     }).database();
     // this.fbase.authWithCustomToken(token, (err, authdata) => {})
+    firebase.firestore().enablePersistence();
   }
 
   public async init(email: string, password: string) {
