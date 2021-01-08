@@ -12,6 +12,7 @@ import { InMemory } from '../../shared/data_backend';
 import {
   Row, Col, Char, Line, SerializedLine, SerializedBlock, SkipListNodeId
 } from './types';
+import { last } from 'lodash';
 
 const headNodeId = -1, tailNodeId = -2;
 
@@ -87,9 +88,13 @@ export class SkipList {
         }
     }
     private sameKey = (a: Key, b: Key) => {
-        return a.id === b.id && a.col === b.col;
+        return (a.id === b.id) && (a.col === b.col);
     }
     public getNode = async (id: SkipListNodeId) => {
+        const node = await this.store.getNode(id);
+        if (node != null && node.id !== id) {
+            console.log('GETNODE ID MISMATCH', id, node);
+        }
         return await this.store.getNode(id);
     }
 
@@ -102,12 +107,26 @@ export class SkipList {
                 next = (await this.getNode(x.forward[i]))!;
             }
         }
+        console.log('getnode', x, x.forward[0], x.forward);
         x = (await this.getNode(x.forward[0]))!;
+        console.log('getnode', x);
         if (!this.isNil(x) && this.sameKey(x.key, key)) {
             return x;
         } else {
             console.log(x, x.key, key);
             return null;
+        }
+    }
+
+    public print = async () => {
+        console.log('print');
+        let x = await this.getHeadNode();
+        console.log(x.key.char);
+        let next = (await this.getNode(x.forward[0]))!;
+        while (!this.isNil(next)) {
+            x = next;
+            console.log(x.key.char);
+            next = (await this.getNode(x.forward[0]))!;
         }
     }
 
@@ -153,7 +172,7 @@ export class SkipList {
     }
 
     private lowerBound = async (key: Key) => {
-        console.time('lowerBound');
+        //console.time('lowerBound');
         let update: SkipListNode[] = new Array(this.maxLevel);
         let x = await this.getHeadNode();
         for (let i = this.maxLevel - 1; i >= 0; i--) {
@@ -165,41 +184,39 @@ export class SkipList {
             update[i] = x;
         }
         x = (await this.getNode(x.forward[0]))!;
-        console.timeEnd('lowerBound');
+        //console.timeEnd('lowerBound');
         return {x, update};
     }
 
     public insert = async (key: Key) => {
-        console.time('insert');
+        //console.time('insert');
+        //console.log('insert', key);
         let {x, update} = await this.lowerBound(key);
         if (!this.isNil(x) && this.sameKey(x.key, key)) {
             // overwrite existing?
-            console.log('Did not insert key since it already exists');
+            console.log('Did not insert key since it already exists', key, x.key);
         } else {
             const lvl = this.randomLevel();
             x = await this.newNode(key);
             for (let i = 0; i < lvl; i++) {
                 x.forward.push(update[i].forward[i]);
-                await this.store.setNode(x);
                 update[i].forward[i] = x.id;
                 await this.store.setNode(update[i]);
             }
+            await this.store.setNode(x);
             this.size++;
         }
-        console.timeEnd('insert');
+        //console.timeEnd('insert');
         return x;
     }
 
     public delete = async (key: Key) => {
+        //console.log('delete', key);
         let {x, update} = await this.lowerBound(key);
         if (!this.isNil(x) && this.sameKey(x.key, key)) {
             for (let i = 0; i < x.forward.length; i++) {
-                if (update[i].forward[i] !== x.id) {
-                    break;
-                } else {
-                    update[i].forward[i] = x.forward[i];
-                    await this.store.setNode(update[i]);
-                }
+                update[i].forward[i] = x.forward[i];
+                await this.store.setNode(update[i]);
             }
             this.size--;
         } else {
@@ -209,6 +226,7 @@ export class SkipList {
 
     private compareKeyString = async (a: Key, b: string): Promise<boolean> => {
         // return a < b
+        console.log('compare', a, b);
         if (b.length === 0) { return false; } // end of pattern
         if (this.isHead(a)) { return true; }
         if (this.isNil(a)) { return false; }
@@ -234,6 +252,7 @@ export class SkipList {
             }
         }
         x = (await this.getNode(x.forward[0]))!;
+        console.log('getkeys', x);
         const ids = new Set();
         const results = [];
         while (!this.isNil(x) && ids.size < num_results) {
@@ -265,7 +284,7 @@ export class SuffixArray {
     }
 
     private getEndOfRecordKey = (id: Row) => {
-        return new Key('', id, -1, null);
+        return new Key('END', id, -1, null);
     }
 
     public insertRecord = async (record: Record) => {
@@ -280,7 +299,7 @@ export class SuffixArray {
 
     public deleteRecord = async (record: Record) => {
         record.text = record.text.toLowerCase();
-        console.log('deleting', record.text);
+        // console.log('deleting', record.text);
         const keys = [await this.getEndOfRecordKey(record.id)];
         // keys are in reverse order
         for (let i = record.text.length - 1; i >= 0; i--) {
@@ -294,7 +313,7 @@ export class SuffixArray {
         }
         // must delete nodes front to back
         for (let i = keys.length - 1; i >= 0; i--) {
-            this.skiplist.delete(keys[i]);
+            await this.skiplist.delete(keys[i]);
         }
     }
 
