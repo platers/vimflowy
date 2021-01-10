@@ -107,9 +107,7 @@ export class SkipList {
                 next = (await this.getNode(x.forward[i]))!;
             }
         }
-        console.log('getnode', x, x.forward[0], x.forward);
         x = (await this.getNode(x.forward[0]))!;
-        console.log('getnode', x);
         if (!this.isNil(x) && this.sameKey(x.key, key)) {
             return x;
         } else {
@@ -226,7 +224,6 @@ export class SkipList {
 
     private compareKeyString = async (a: Key, b: string): Promise<boolean> => {
         // return a < b
-        console.log('compare', a, b);
         if (b.length === 0) { return false; } // end of pattern
         if (this.isHead(a)) { return true; }
         if (this.isNil(a)) { return false; }
@@ -252,7 +249,6 @@ export class SkipList {
             }
         }
         x = (await this.getNode(x.forward[0]))!;
-        console.log('getkeys', x);
         const ids = new Set();
         const results = [];
         while (!this.isNil(x) && ids.size < num_results) {
@@ -275,10 +271,37 @@ export class Record {
 }
 
 export class SuffixArray {
+    public insertRecord = async (_record: Record): Promise<void> => {
+        throw new errors.NotImplemented();
+    }
+
+    public deleteRecord = async (_record: Record): Promise<void> => {
+        throw new errors.NotImplemented();
+    }
+
+    public query = async (_pattern: string, _num_results: number): Promise<Row[]> => {
+        throw new errors.NotImplemented();
+    }
+
+    public length = (): number => {
+        throw new errors.NotImplemented();
+    }
+
+    public getLastRow = async (): Promise<Row> => {
+        throw new errors.NotImplemented();
+    }
+
+    public setLastRow = async (_row: Row): Promise<void> => {
+        throw new errors.NotImplemented();
+    }
+}
+
+export class ClientSuffixArray extends SuffixArray{
     private skiplist: SkipList;
     public store: SkipListStore;
 
     constructor (store: SkipListStore) {
+        super();
         this.store = store;
         this.skiplist = new SkipList(this.store, 0.5, 30);
     }
@@ -340,5 +363,13 @@ export class SuffixArray {
 
     public length = () => {
         return this.skiplist.length();
+    }
+
+    public getLastRow = async (): Promise<Row> => {
+        return this.store.getLastRow();
+    }
+
+    public setLastRow = async (row: Row): Promise<void> => {
+        return this.store.setLastRow(row);
     }
 }

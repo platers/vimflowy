@@ -12,7 +12,7 @@ import { InMemory } from '../../shared/data_backend';
 import {
   Row, Col, Char, Line, SerializedLine, SerializedBlock
 } from './types';
-import { Record, SuffixArray } from './suffixarray';
+import { Record, ClientSuffixArray, SuffixArray } from './suffixarray';
 
 type RowInfo = {
   readonly line: Line;
@@ -221,17 +221,17 @@ export default class Document extends EventEmitter {
     this.skipStore = skipStore;
     this.name = name;
     this.root = Path.root();
-    this.suffixarray = new SuffixArray(this.skipStore);
-    this.loadSuffixArray();
+    this.suffixarray = new ClientSuffixArray(this.skipStore);
+    //this.loadSuffixArray();
     return this;
   }
 
   public async loadSuffixArray() {
     const lastRow = await this.store.getLastId();
-    const lastRowInserted = await this.suffixarray.store.getLastRow();
+    const lastRowInserted = await this.suffixarray.getLastRow();
     for (let row = lastRowInserted + 1; row <= lastRow; row++) {
       await this.suffixarray.insertRecord(new Record(row, await this.getText(row)));
-      this.suffixarray.store.setLastRow(row);
+      this.suffixarray.setLastRow(row);
       console.log('inserted record', row, 'of', lastRow);
     }
     console.log('loaded suffix array');
@@ -335,10 +335,10 @@ export default class Document extends EventEmitter {
   }
 
   public async setLine(row: Row, line: Line) {
-    this.suffixarray.deleteRecord(new Record(row, await this.getText(row)));
+    await this.suffixarray.deleteRecord(new Record(row, await this.getText(row)));
     this.cache.setLine(row, line);
     await this.store.setLine(row, line);
-    this.suffixarray.insertRecord(new Record(row, line.join('')));
+    await this.suffixarray.insertRecord(new Record(row, line.join('')));
   }
 
   // get word at this location
