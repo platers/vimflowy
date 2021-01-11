@@ -29,6 +29,7 @@ import PluginsTableComponent from './pluginTable';
 import BackendSettingsComponent from './settings/backendSettings';
 import FileInput from './fileInput';
 import BehaviorSettingsComponent from './settings/behaviorSettings';
+import { ClientSuffixArray } from '../suffixarray';
 
 enum TABS {
   DATA,
@@ -83,7 +84,7 @@ export default class SettingsComponent extends React.Component<Props, State> {
 
     (async () => {
       const backend = new InMemory();
-      const preview_document = new Document(new DocumentStore(backend), new SkipListStore(backend));
+      const preview_document = new Document(new DocumentStore(backend), new ClientSuffixArray(new SkipListStore(backend)));
       await preview_document.load([
         { text: 'Preview document', children: [
           { text: 'Breadcrumbs', children: [

@@ -298,7 +298,7 @@ export class SuffixArray {
 
 export class ClientSuffixArray extends SuffixArray{
     private skiplist: SkipList;
-    public store: SkipListStore;
+    private store: SkipListStore;
 
     constructor (store: SkipListStore) {
         super();
@@ -371,5 +371,31 @@ export class ClientSuffixArray extends SuffixArray{
 
     public setLastRow = async (row: Row): Promise<void> => {
         return this.store.setLastRow(row);
+    }
+}
+
+export class FirebaseSuffixArray extends SuffixArray {
+    public insertRecord = async (_record: Record): Promise<void> => {
+        throw new errors.NotImplemented();
+    }
+
+    public deleteRecord = async (_record: Record): Promise<void> => {
+        throw new errors.NotImplemented();
+    }
+
+    public query = async (_pattern: string, _num_results: number): Promise<Row[]> => {
+        throw new errors.NotImplemented();
+    }
+
+    public length = (): number => {
+        throw new errors.NotImplemented();
+    }
+
+    public getLastRow = async (): Promise<Row> => {
+        throw new errors.NotImplemented();
+    }
+
+    public setLastRow = async (_row: Row): Promise<void> => {
+        throw new errors.NotImplemented();
     }
 }

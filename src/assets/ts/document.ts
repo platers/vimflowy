@@ -212,16 +212,14 @@ export default class Document extends EventEmitter {
   public name: string;
   public root: Path;
   public suffixarray: SuffixArray;
-  public skipStore: SkipListStore;
 
-  constructor(store: DocumentStore, skipStore: SkipListStore, name = '') {
+  constructor(store: DocumentStore, suffixArray: SuffixArray, name = '') {
     super();
     this.cache = new DocumentCache();
     this.store = store;
-    this.skipStore = skipStore;
+    this.suffixarray = suffixArray;
     this.name = name;
     this.root = Path.root();
-    this.suffixarray = new ClientSuffixArray(this.skipStore);
     //this.loadSuffixArray();
     return this;
   }
@@ -922,6 +920,6 @@ export default class Document extends EventEmitter {
 export class InMemoryDocument extends Document {
   constructor() {
     const backend = new InMemory();
-    super(new DocumentStore(backend), new SkipListStore(backend));
+    super(new DocumentStore(backend), new ClientSuffixArray(new SkipListStore(backend)));
   }
 }

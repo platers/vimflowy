@@ -91,6 +91,20 @@ export class FirebaseBackend extends DataBackend {
     // this.fbase.authWithCustomToken(token, (err, authdata) => {})
   }
 
+  public async functionsImplemented() {
+    const implemented = firebase.functions().httpsCallable('checkImplemented');
+    const result = await implemented()
+    .catch((error) => {
+      console.log(error);
+      return null;
+    });
+    if (result == null || !result.data.suffixArryImplemented) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+
   public async init(email: string, password: string) {
     this.events.emit('saved');
 

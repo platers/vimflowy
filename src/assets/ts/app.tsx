@@ -49,6 +49,7 @@ import '../../plugins';
 import KeyBindings from './keyBindings';
 
 import AppComponent, { TextMessage } from './components/app';
+import { ClientSuffixArray, FirebaseSuffixArray, SuffixArray } from './suffixarray';
 
 declare const window: any; // because we attach globals for debugging
 
@@ -102,6 +103,8 @@ $(document).ready(async () => {
   let docStore: DocumentStore;
   let backend_type: BackendType;
   let skipStore: SkipListStore;
+  let suffixArray: SuffixArray;
+  let firebaseSuffixArray: boolean = false;
   let doc;
 
   // TODO: consider using modernizr for feature detection
@@ -145,6 +148,12 @@ $(document).ready(async () => {
     await fb_backend.init(firebaseUserEmail || '', firebaseUserPassword || '');
 
     logger.info(`Successfully initialized firebase connection: ${firebaseId}`);
+
+    if (await fb_backend.functionsImplemented()) {
+      firebaseSuffixArray = true;
+      console.log('Using firebase suffix array');
+    }
+
     return { docStore: dStore, skipStore: sStore };
   }
 
@@ -235,8 +244,12 @@ $(document).ready(async () => {
     ({docStore, skipStore} = getLocalStore());
     backend_type = 'local';
   }
-
-  doc = new Document(docStore, skipStore, docname);
+  if (firebaseSuffixArray) {
+    suffixArray = new FirebaseSuffixArray();
+  } else {
+    suffixArray = new ClientSuffixArray(skipStore);
+  }
+  doc = new Document(docStore, suffixArray, docname);
 
   let to_load: any = null;
   if ((await docStore.getChildren(Path.rootRow())).length === 0) {
