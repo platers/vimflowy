@@ -764,7 +764,6 @@ export default class Document extends EventEmitter {
     const canonicalize = (x: string) => x.toLowerCase();
     const query_words =
       query.split(/\s/g).filter(x => x.length).map(canonicalize);
-    console.log('suffix array size ', this.suffixarray.length());
     const rows = await this.suffixarray.query(query, nresults * 3); // get more results since some might be invalid
     for await (let row of rows) {
       const path = await this.canonicalPath(row);

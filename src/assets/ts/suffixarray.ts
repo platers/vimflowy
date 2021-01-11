@@ -1,6 +1,6 @@
 import * as _ from 'lodash';
 // import 'core-js/shim';
-
+import firebase from 'firebase';
 import * as errors from '../../shared/utils/errors';
 import EventEmitter from './utils/eventEmitter';
 import * as fn_utils from './utils/functional';
@@ -45,11 +45,9 @@ export class SkipList {
     private store: SkipListStore;
     private p: number;
     private maxLevel: number;
-    private size: number;
 
     constructor (store: SkipListStore, p: number = 0.5, maxLevel: number = 10) {
         this.store = store;
-        this.size = 0;
         this.p = p;
         this.maxLevel = maxLevel;
     }
@@ -202,7 +200,6 @@ export class SkipList {
                 await this.store.setNode(update[i]);
             }
             await this.store.setNode(x);
-            this.size++;
         }
         //console.timeEnd('insert');
         return x;
@@ -216,7 +213,6 @@ export class SkipList {
                 update[i].forward[i] = x.forward[i];
                 await this.store.setNode(update[i]);
             }
-            this.size--;
         } else {
             console.log('Failed to delete key not in suffix array', key, x.key);
         }
@@ -232,10 +228,6 @@ export class SkipList {
 
         if (a.char !== b[0]) { return a.char < b[0]; }
         return await this.compareKeyString((await this.getNode(a.next))!.key, b.slice(1));
-    }
-
-    public length = () => {
-        return this.size;
     }
 
     // Get up to num_results unique ids that might match query
@@ -261,6 +253,7 @@ export class SkipList {
         return results;
     }
 }
+
 export class Record {
     public id: Row;
     public text: string;
@@ -280,10 +273,6 @@ export class SuffixArray {
     }
 
     public query = async (_pattern: string, _num_results: number): Promise<Row[]> => {
-        throw new errors.NotImplemented();
-    }
-
-    public length = (): number => {
         throw new errors.NotImplemented();
     }
 
@@ -361,10 +350,6 @@ export class ClientSuffixArray extends SuffixArray{
         return results;
     }
 
-    public length = () => {
-        return this.skiplist.length();
-    }
-
     public getLastRow = async (): Promise<Row> => {
         return this.store.getLastRow();
     }
@@ -375,27 +360,55 @@ export class ClientSuffixArray extends SuffixArray{
 }
 
 export class FirebaseSuffixArray extends SuffixArray {
-    public insertRecord = async (_record: Record): Promise<void> => {
-        throw new errors.NotImplemented();
+    public insertRecord = async (record: Record): Promise<void> => {
+        const insertRecord = firebase.functions().httpsCallable('insertRecord');
+        const result = await insertRecord({ record: record })
+        .catch((error) => {
+            console.log('Failed to insert record in firebase', error);
+        });
     }
 
-    public deleteRecord = async (_record: Record): Promise<void> => {
-        throw new errors.NotImplemented();
+    public deleteRecord = async (record: Record): Promise<void> => {
+        const deleteRecord = firebase.functions().httpsCallable('deleteRecord');
+        const result = await deleteRecord({ record: record })
+        .catch((error) => {
+            console.log('Failed to delete record in firebase', error);
+        });
     }
 
-    public query = async (_pattern: string, _num_results: number): Promise<Row[]> => {
-        throw new errors.NotImplemented();
-    }
-
-    public length = (): number => {
-        throw new errors.NotImplemented();
+    public query = async (pattern: string, num_results: number): Promise<Row[]> => {
+        const query = firebase.functions().httpsCallable('query');
+        const result = await query({ pattern: pattern, num_results: num_results })
+        .catch((error) => {
+            console.log('Failed to query in firebase', error);
+            return null;
+        });
+        if (result == null) {
+            throw('Failed to query in firebase');
+        } else {
+            return result.data.results;
+        }
     }
 
     public getLastRow = async (): Promise<Row> => {
-        throw new errors.NotImplemented();
+        const getLastRow = firebase.functions().httpsCallable('getLastRow');
+        const result = await getLastRow({})
+        .catch((error) => {
+            console.log('Failed to getLastRow in firebase', error);
+            return null;
+        });
+        if (result == null) {
+            throw('Failed to getLastRow in firebase');
+        } else {
+            return result.data.lastRow;
+        }
     }
 
-    public setLastRow = async (_row: Row): Promise<void> => {
-        throw new errors.NotImplemented();
+    public setLastRow = async (row: Row): Promise<void> => {
+        const setLastRow = firebase.functions().httpsCallable('setLastRow');
+        const result = await setLastRow({ row: row })
+        .catch((error) => {
+            console.log('Failed to setLastRow in firebase', error);
+        });
     }
 }
