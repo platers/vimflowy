@@ -2,17 +2,11 @@ import * as _ from 'lodash';
 // import 'core-js/shim';
 import firebase from 'firebase';
 import * as errors from '../../shared/utils/errors';
-import EventEmitter from './utils/eventEmitter';
-import * as fn_utils from './utils/functional';
 // import logger from './utils/logger';
-import { isWhitespace } from './utils/text';
-import Path from './path';
 import { SkipListStore } from './datastore';
-import { InMemory } from '../../shared/data_backend';
 import {
-  Row, Col, Char, Line, SerializedLine, SerializedBlock, SkipListNodeId
+  Row, Char, SkipListNodeId
 } from './types';
-import { last } from 'lodash';
 
 const headNodeId = -1, tailNodeId = -2;
 
@@ -362,7 +356,7 @@ export class ClientSuffixArray extends SuffixArray{
 export class FirebaseSuffixArray extends SuffixArray {
     public insertRecord = async (record: Record): Promise<void> => {
         const insertRecord = firebase.functions().httpsCallable('insertRecord');
-        const result = await insertRecord({ record: record })
+        await insertRecord({ record: record })
         .catch((error) => {
             console.log('Failed to insert record in firebase', error);
         });
@@ -370,7 +364,7 @@ export class FirebaseSuffixArray extends SuffixArray {
 
     public deleteRecord = async (record: Record): Promise<void> => {
         const deleteRecord = firebase.functions().httpsCallable('deleteRecord');
-        const result = await deleteRecord({ record: record })
+        await deleteRecord({ record: record })
         .catch((error) => {
             console.log('Failed to delete record in firebase', error);
         });
@@ -406,7 +400,7 @@ export class FirebaseSuffixArray extends SuffixArray {
 
     public setLastRow = async (row: Row): Promise<void> => {
         const setLastRow = firebase.functions().httpsCallable('setLastRow');
-        const result = await setLastRow({ row: row })
+        await setLastRow({ row: row })
         .catch((error) => {
             console.log('Failed to setLastRow in firebase', error);
         });

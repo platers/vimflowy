@@ -7,7 +7,6 @@ import { Theme, defaultTheme } from './themes';
 
 import { Row, Line, SerializedPath, MacroMap, SkipListNodeId } from './types';
 import { Key, SkipListNode } from './suffixarray';
-import { trim } from 'jquery';
 
 /*
 DataStore abstracts the data layer, so that it can be swapped out.
@@ -214,14 +213,12 @@ export class SkipListStore {
   private use_cache: boolean = true;
   public events: EventEmitter = new EventEmitter();
   private backend: DataBackend;
-  private lastRow: number | null;
 
   constructor(backend: DataBackend, docname = '') {
     this.backend = backend;
     this.docname = docname;
     this.prefix = `${this.docname}skiplist`;
     this.lastId = null;
-    this.lastRow = null;
   }
 
   private async _get<T>(key: string, default_value: T): Promise<T> {

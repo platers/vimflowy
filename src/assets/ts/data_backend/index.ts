@@ -1,4 +1,5 @@
 import firebase from 'firebase';
+import * as admin from 'firebase-admin';
 // import "firebase/auth";
 
 import EventEmitter from '../utils/eventEmitter';
@@ -77,28 +78,39 @@ export class LocalStorageBackend extends DataBackend {
 export class FirebaseBackend extends DataBackend {
   public events: EventEmitter = new EventEmitter();
 
-  private fbase: firebase.database.Database;
+  private fbase: firebase.database.Database | admin.database.Database;
   private numPendingSaves: number = 0;
   private docname: string;
 
-  constructor(docname = '', dbName: string, apiKey: string) {
+  constructor(docname = '', dbName: string, apiKey: string, inCloud: boolean) {
     super();
     this.docname = docname;
-    this.fbase = firebase.initializeApp({
-      apiKey: apiKey,
-      databaseURL: `https://${dbName}.firebaseio.com`,
-    }).database();
+    if (inCloud) {
+      this.fbase = admin.initializeApp().database();
+    } else {
+      if (dbName === '' || apiKey === '') {
+        throw new Error('Empty firebase dbName or apiKey');
+      }
+      this.fbase = firebase.initializeApp({
+        apiKey: apiKey,
+        databaseURL: `https://${dbName}.firebaseio.com`,
+        projectId: dbName,
+      }).database();
+    }
+    firebase.app().functions('us-central1');
     // this.fbase.authWithCustomToken(token, (err, authdata) => {})
   }
 
   public async functionsImplemented() {
-    const implemented = firebase.functions().httpsCallable('checkImplemented');
-    const result = await implemented()
+    const implemented = firebase.app().functions('us-central1').httpsCallable('checkImplemented');
+    const result = await implemented({})
     .catch((error) => {
       console.log(error);
+      console.log(error.code, error.message, error.details);
       return null;
     });
-    if (result == null || !result.data.suffixArryImplemented) {
+    if (result == null || !result.data.implemented) {
+      console.log(result);
       return false;
     } else {
       return true;
@@ -116,7 +128,7 @@ export class FirebaseBackend extends DataBackend {
     await lastClientRef.set(clientId);
 
     // Number of online users is the number of objects in the presence list.
-    lastClientRef.on('value', function(snap) {
+    lastClientRef.on('value', function(snap: { val: () => string; } | null) {
       if (snap == null) {
         throw new Error('Failed to get listRef');
       }
@@ -142,7 +154,7 @@ export class FirebaseBackend extends DataBackend {
     return new Promise((resolve: (result: string | null) => void, reject) => {
       this.fbase.ref(key).once(
         'value',
-        (data) => {
+        (data: { exists: () => any; val: () => string | null; }) => {
           const exists = data.exists();
           if (!exists) {
             return resolve(null);

@@ -50,6 +50,7 @@ import KeyBindings from './keyBindings';
 
 import AppComponent, { TextMessage } from './components/app';
 import { ClientSuffixArray, FirebaseSuffixArray, SuffixArray } from './suffixarray';
+import firebase from 'firebase';
 
 declare const window: any; // because we attach globals for debugging
 
@@ -142,7 +143,7 @@ $(document).ready(async () => {
     if (!firebaseApiKey) {
       throw new Error('No firebase API key found');
     }
-    const fb_backend = new FirebaseBackend(docname, firebaseId, firebaseApiKey);
+    const fb_backend = new FirebaseBackend(docname, firebaseId, firebaseApiKey, false);
     const dStore = new DocumentStore(fb_backend, docname);
     const sStore = new SkipListStore(fb_backend, docname);
     await fb_backend.init(firebaseUserEmail || '', firebaseUserPassword || '');
@@ -152,6 +153,8 @@ $(document).ready(async () => {
     if (await fb_backend.functionsImplemented()) {
       firebaseSuffixArray = true;
       console.log('Using firebase suffix array');
+    } else {
+      console.log('Not using firebase suffix array');
     }
 
     return { docStore: dStore, skipStore: sStore };
@@ -245,6 +248,7 @@ $(document).ready(async () => {
     backend_type = 'local';
   }
   if (firebaseSuffixArray) {
+    console.log('Using firebase suffix array');
     suffixArray = new FirebaseSuffixArray();
   } else {
     suffixArray = new ClientSuffixArray(skipStore);
