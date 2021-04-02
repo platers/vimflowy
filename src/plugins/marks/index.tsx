@@ -12,7 +12,7 @@ import Session, { InMemorySession } from '../../assets/ts/session';
 import LineComponent from '../../assets/ts/components/line';
 import Mutation from '../../assets/ts/mutations';
 import Path from '../../assets/ts/path';
-import { Col, Row } from '../../assets/ts/types';
+import { Col, Row, SerializedBlock } from '../../assets/ts/types';
 import { getStyles } from '../../assets/ts/themes';
 
 import { SINGLE_LINE_MOTIONS } from '../../assets/ts/definitions/motions';
@@ -234,7 +234,20 @@ export class MarksPlugin {
             const path = allMarks[mark];
             await session.zoomInto(path);
           } else {
-            session.showMessage(`No mark ${mark} to go to!`);
+            // create new row with mark
+            const parent = session.cursor.path.parent;
+            if (parent === null) {
+              throw Error('cursor parent path is null');
+            }
+            let serialized_row: SerializedBlock = {
+              text: mark,
+              collapsed: false,
+              plugins: { mark: mark },
+              children: [],
+            };
+            const addedPaths = await session.addBlocks(parent, -1, [serialized_row], {setCursor: 'first'});
+            await that.api.updatedDataForRender(parent.row);
+            await session.zoomInto(addedPaths[0]);
           }
         };
       },

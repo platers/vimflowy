@@ -296,6 +296,49 @@ describe('marks', function() {
     await t.done();
   });
 
+  it('can be created with gm', async function() {
+    let t = new MarksTestCase([
+      { text: '@mark2 @mark3', children: [
+        'line',
+      ] },
+      { text: 'stuff', plugins: {mark: 'mark2'}, children: [
+        'more stuff',
+      ] },
+    ], {plugins: [Marks.pluginName]});
+    t.sendKeys('wwgm');
+    t.expectViewRoot(5);
+    t.expect([
+      { text: '@mark2 @mark3', children: [
+        'line',
+      ] },
+      { text: 'stuff', plugins: {mark: 'mark2'}, children: [
+        'more stuff',
+      ] },
+      { text: 'mark3', plugins: {mark: 'mark3'} },
+    ]);
+    t.sendKeys('u');
+    t.expectViewRoot(0);
+    t.expect([
+      { text: '@mark2 @mark3', children: [
+        'line',
+      ] },
+      { text: 'stuff', plugins: {mark: 'mark2'}, children: [
+        'more stuff',
+      ] },
+    ]);
+    t.sendKey('ctrl+r');
+    t.expectViewRoot(5);
+    t.expect([
+      { text: '@mark2 @mark3', children: [
+        'line',
+      ] },
+      { text: 'stuff', plugins: {mark: 'mark2'}, children: [
+        'more stuff',
+      ] },
+      { text: 'mark3', plugins: {mark: 'mark3'} },
+    ]);
+    await t.done();
+  });
   it('can be visited with gm with [[format]] with spaces', async function() {
     let t = new MarksTestCase([
       { text: '[[mark 2]] [[mark3]]', children: [
