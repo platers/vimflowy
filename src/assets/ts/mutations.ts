@@ -336,6 +336,9 @@ export class DetachBlocks extends Mutation {
   }
 
   public async mutate(session: Session) {
+    if (this.index === -1) {
+      this.index = (await session.document._getChildren(this.parent)).length - 1;
+    }
     this.deleted = await session.document._getChildren(this.parent, this.index, this.index + this.nrows - 1);
 
     for (let i = 0; i < this.deleted.length; i++) {

@@ -12,12 +12,13 @@ import Session, { InMemorySession } from '../../assets/ts/session';
 import LineComponent from '../../assets/ts/components/line';
 import Mutation from '../../assets/ts/mutations';
 import Path from '../../assets/ts/path';
-import { Row } from '../../assets/ts/types';
+import { Col, Row, SerializedBlock } from '../../assets/ts/types';
 import { getStyles } from '../../assets/ts/themes';
 
 import { SINGLE_LINE_MOTIONS } from '../../assets/ts/definitions/motions';
 import { INSERT_MOTION_MAPPINGS } from '../../assets/ts/configurations/vim';
 import { motionKey } from '../../assets/ts/keyDefinitions';
+import { ChangeChars } from '../../assets/ts/mutations';
 
 // TODO: do this elsewhere
 declare const process: any;
@@ -54,6 +55,8 @@ export class MarksPlugin {
   public SetMark!: new(row: Row, mark: Mark) => Mutation;
   public UnsetMark!: new(row: Row) => Mutation;
   private marks_to_paths: {[mark: string]: Path};
+  private autocomplete_idx: number;
+  private autocomplete_matches: string[];
 
   constructor(api: PluginApi) {
     this.api = api;
@@ -63,6 +66,8 @@ export class MarksPlugin {
     // NOTE: this may not be initialized correctly at first
     // this only affects rendering @marklinks for now
     this.marks_to_paths = {};
+    this.autocomplete_idx = 0;
+    this.autocomplete_matches = [];
   }
 
   public async enable() {
@@ -175,16 +180,14 @@ export class MarksPlugin {
       },
       key_transforms: [
         async (key, context) => {
-          // must be non-whitespace
+          if (key === 'space') { key = ' '; };
           if (key.length === 1) {
-            if (/^\S*$/.test(key)) {
-              if (this.markstate === null) {
-                throw new Error('Mark state null during key transform');
-              }
-              await this.markstate.session.addCharsAtCursor([key]);
-              await this.api.updatedDataForRender(this.markstate.path.row);
-              return [null, context];
+            if (this.markstate === null) {
+              throw new Error('Mark state null during key transform');
             }
+            await this.markstate.session.addCharsAtCursor([key]);
+            await this.api.updatedDataForRender(this.markstate.path.row);
+            return [null, context];
           }
           return [key, context];
         },
@@ -220,20 +223,43 @@ export class MarksPlugin {
       'Go to the mark indicated by the cursor, if it exists',
       async function({ session }) {
         return async cursor => {
-          const word = await session.document.getWord(cursor.row, cursor.col);
-          if (word.length < 1 || word[0] !== '@') {
-            session.showMessage(`Cursor should be over a @mark link`);
+          const line = await session.document.getText(cursor.row);
+          const mark = that.getMarkUnderCursor(line, cursor.col);
+          if (!mark) {
+            session.showMessage(`Cursor should be over a mark link`);
             return;
           }
-          const mark = word.slice(1);
           const allMarks = await that.listMarks();
           if (mark in allMarks) {
             const path = allMarks[mark];
             await session.zoomInto(path);
           } else {
-            session.showMessage(`No mark ${mark} to go to!`);
+            // create new row with mark
+            const parent = session.cursor.path.parent;
+            if (parent === null) {
+              throw Error('cursor parent path is null');
+            }
+            let serialized_row: SerializedBlock = {
+              text: mark,
+              collapsed: false,
+              plugins: { mark: mark },
+              children: [],
+            };
+            const addedPaths = await session.addBlocks(parent, -1, [serialized_row], {setCursor: 'first'});
+            await that.api.updatedDataForRender(parent.row);
+            await session.zoomInto(addedPaths[0]);
           }
         };
+      },
+    );
+
+    this.api.registerAction(
+      'set-mark-row-contents',
+      'Set a mark with the current row text',
+      async function({ session, keyStream }) {
+        const err = await that.setMark(session.cursor.row, await session.document.getText(session.cursor.row));
+        if (err) { session.showMessage(err, {text_class: 'error'}); }
+        keyStream.save();
       },
     );
 
@@ -354,6 +380,7 @@ export class MarksPlugin {
       'NORMAL',
       {
         'begin-mark': [['m']],
+        'set-mark-row-contents': [['M']],
         'go-mark': [['g', 'm']],
         'delete-mark': [['d', 'm']],
         'search-marks': [['\''], ['`']],
@@ -380,6 +407,7 @@ export class MarksPlugin {
       return options;
     });
 
+    // Renders mark to the left of line
     this.api.registerHook('session', 'renderLineContents', (lineContents, info) => {
       const { pluginData } = info;
       if (pluginData.marks) {
@@ -423,16 +451,83 @@ export class MarksPlugin {
       return lineContents;
     });
 
-    this.api.registerHook('session', 'renderWordTokenHook', (tokenizer) => {
+    // Renders autocomplete menu
+    this.api.registerHook('session', 'renderCharChildren', (children, info) => {
+      const { lineData, column, cursors } = info;
+      const line: string = lineData.join('');
+      const cursor = this.session.cursor;
+      if (this.session.mode === 'INSERT' && Object.keys(cursors).length > 0) {
+        const matches = this.getMarkMatches(line);
+        let inAutocomplete = false;
+        matches.map(pos => {
+          const start = pos[0], end = pos[1];
+          if (cursor.col >= start + 1 && cursor.col <= end) {
+            inAutocomplete = true;
+            if (start === column) {
+              const query = this.parseMarkMatch(line.slice(start, end));
+              this.autocomplete_matches = this.searchMark(query).slice(0, 10); // only show first 10 results
+              const n = matches.length;
+              if (n === 0) {
+                this.autocomplete_idx = 0;
+                return;
+              }
+              children.push(
+                <span key='autocompleteAnchor'
+                  style={{
+                    position: 'relative'
+                  }}>
+                  <span key='autocompleteContainer'
+                    style={{
+                      ...getStyles(this.api.session.clientStore, ['theme-bg-tertiary']),
+                      position: 'absolute',
+                      width: '200px',
+                      top: '1.2em'
+                    }}
+                  > 
+                    {this.autocomplete_matches.map((mark, idx) => {
+                      const theme = (this.autocomplete_idx === idx) ? 'theme-bg-secondary' : 'theme-bg-tertiary';
+                      return (
+                        <div key={`autocomplete-row-${idx}`}
+                          style={{
+                            ...getStyles(this.api.session.clientStore, [theme]),
+                          }}>
+                          {mark}
+                        </div>
+                      );
+                    })}
+                  </span>
+                </span>
+              );
+            }
+
+          }
+        });
+        if (!inAutocomplete) {
+          this.autocomplete_idx = 0;
+          this.autocomplete_matches = [];
+        }
+      }
+      if (this.session.mode !== 'INSERT') {
+        this.autocomplete_idx = 0;
+        this.autocomplete_matches = [];
+      }
+      return children;
+    });
+
+    // Renders mark links
+    this.api.registerHook('session', 'renderLineTokenHook', (tokenizer) => {
       return tokenizer.then(new PartialUnfolder<Token, React.ReactNode>((
         token: Token, emit: EmitFn<React.ReactNode>, wrapped: Tokenizer
       ) => {
         if (this.session.mode === 'NORMAL') {
-          if (token.text[0] === '@') {
-            const mark = token.text.slice(1).replace(/(\.|!|\?)+$/g, '');
+          const matches = this.getMarkMatches(token.text);
+          matches.map(pos => {
+            let start = pos[0];
+            let end = pos[1];
+            const mark = this.parseMarkMatch(token.text.slice(start, end));
             const path = this.marks_to_paths[mark];
             if (path) {
-              token.info.forEach((char_info) => {
+              token.info.slice(start, end).forEach((char_info) => {
                 char_info.renderOptions.divType = 'a';
                 char_info.renderOptions.style = char_info.renderOptions.style || {};
                 Object.assign(char_info.renderOptions.style, getStyles(this.session.clientStore, ['theme-link']));
@@ -442,12 +537,51 @@ export class MarksPlugin {
                 };
               });
             }
-          }
+          });
         }
         emit(...wrapped.unfold(token));
-      }));
+        }));
     });
 
+    // Handles up and down in autocomplete
+    this.api.registerHook('session', 'move-cursor-insert', async (struct, info) => {
+      const { action } = info;
+      const line = await that.document.getText(this.session.cursor.row);
+      const curMark = that.getMarkUnderCursor(line, this.session.cursor.col);
+      if (curMark === null) { return; };
+      const n = this.autocomplete_matches.length;
+      if (action === 'down') {
+        struct.preventDefault = true;
+        this.autocomplete_idx = ((this.autocomplete_idx % n) + n + 1) % n;
+      }
+      if (action === 'up') {
+        struct.preventDefault = true;
+        this.autocomplete_idx = ((this.autocomplete_idx % n) + n + n - 1) % n;
+      }
+    });
+
+    // Handles enter in autocomplete
+    this.api.registerHook('session', 'split-line', async (struct) => {
+      const line = await that.document.getText(this.session.cursor.row);
+      const curMark = that.getMarkUnderCursor(line, this.session.cursor.col);
+      if (curMark === null) { return; };
+      if (this.autocomplete_matches) {
+        struct.preventDefault = true;
+        // Set mark text
+        const matches = this.getMarkMatches(line);
+        const cursor = this.session.cursor;
+        const match = this.autocomplete_matches[this.autocomplete_idx];
+        await Promise.all(matches.map(async pos => {
+          if (cursor.col >= pos[0] && cursor.col <= pos[1]) {
+            const start = line[pos[0]] === '@' ? pos[0] + 1 : pos[0] + 2;
+            const end = line[pos[0]] === '@' ? pos[1] : pos[1] - 2;
+            const mutation = new ChangeChars(cursor.row, start, end - start, undefined, match.split(''));
+            await this.session.do(mutation);
+            cursor.col = start + match.length;
+          }
+        }));
+      }
+    });
     this.api.registerListener('document', 'afterDetach', async () => {
       this.computeMarksToPaths(); // FIRE AND FORGET
     });
@@ -583,6 +717,56 @@ export class MarksPlugin {
     }
 
     return null;
+  }
+
+  public getMarkMatches(line: string) {
+    const matches = [];
+    let index = 0;
+    const regex = /(@\S*|\[\[([^\]]*)\]\])/;
+    while (true) {
+      let match = regex.exec(line.slice(index));
+      if (!match) { break; }
+      let start = index + match.index;
+      let end = start + match[0].length;
+      index = end;
+      matches.push([start, end]);
+
+    }
+    return matches;
+  }
+
+  public parseMarkMatch(match: string) {
+    const end = match.length;
+    let markStart = 0, markEnd = end;
+    if (match[0] === '@') {
+      markStart = 1;
+      markEnd = end;
+    }
+    if (match[0] === '[') {
+      markStart = 2;
+      markEnd = end - 2;
+    }
+    const mark = match.slice(markStart, markEnd).replace(/(\.|!|\?)+$/g, '');
+    return mark;
+  }
+
+  public getMarkUnderCursor(line: string, col: Col): string | null {
+    const matches = this.getMarkMatches(line);
+    let mark = null;
+    matches.map((pos) => {
+      if (col >= pos[0] && col <= pos[1]) {
+        mark = this.parseMarkMatch(line.slice(pos[0], pos[1]));
+      }
+    });
+    return mark;
+  }
+
+  private searchMark(query: string) {
+    const marks = Object.keys(this.marks_to_paths);
+    const matches = marks.filter(mark => {
+      return mark.includes(query);
+    }).sort();
+    return matches;
   }
 }
 
