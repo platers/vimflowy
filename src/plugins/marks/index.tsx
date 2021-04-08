@@ -247,7 +247,6 @@ export class MarksPlugin {
             };
             const addedPaths = await session.addBlocks(parent, -1, [serialized_row], {setCursor: 'first'});
             await that.api.updatedDataForRender(parent.row);
-            await session.zoomInto(addedPaths[0]);
           }
         };
       },
