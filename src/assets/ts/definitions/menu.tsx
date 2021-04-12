@@ -43,6 +43,7 @@ async function start_search(searchRoot: Path, session: Session) {
             await session.zoomInto(path);
             await session.cursor.setPath(path);
           },
+          yank_fn: async () => await session.yankBlocksClone(path, 1),
         };
       })
     );
@@ -110,6 +111,18 @@ keyDefinitions.registerAction(new Action(
       throw new Error('Menu session missing');
     }
     await session.menu.select();
+    return await session.setMode('NORMAL');
+  },
+));
+
+keyDefinitions.registerAction(new Action(
+  'search-yank',
+  'Yank clone of current menu selection',
+  async function({ session }) {
+    if (session.menu == null) {
+      throw new Error('Menu session missing');
+    }
+    await session.menu.yank();
     return await session.setMode('NORMAL');
   },
 ));

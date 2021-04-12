@@ -390,6 +390,7 @@ export class MarksPlugin {
                     );
                   },
                   fn: async () => await session.zoomInto(path),
+                  yank_fn: async () => await session.yankBlocksClone(path, 1),
                 };
               }
             )

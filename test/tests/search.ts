@@ -257,6 +257,33 @@ describe('global search', function() {
     await t.done();
   });
 
+  it.only('can yank clone', async function() {
+    let t = new TestCase([
+      { text: 'first', children: [
+        { text: 'second', children: [
+          'third',
+        ] },
+      ] },
+    ]);
+    t.sendKey(globalSearchKey);
+    t.sendKeys('sec');
+    t.sendKey('ctrl+y');
+    t.expectViewRoot(0);
+    t.sendKeys('P');
+    t.expect([
+        { text: 'second', children: [
+          'third',
+        ],
+        'id': 2 },
+      { text: 'first', children: [
+        {
+          'clone': 2
+        }
+      ] },
+    ]);
+    await t.done();
+  });
+
   it('moves the cursor to the searched for row', async function() {
     let t = new TestCase([
       { text: 'first', children: [

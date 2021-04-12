@@ -118,12 +118,14 @@ export default class SettingsComponent extends React.Component<Props, State> {
           {
             contents: 'Some blah result'.split(''),
             renderOptions: { accents: makeAccents(5, 8) },
-            fn: () => null
+            fn: () => null,
+            yank_fn: () => null,
           },
           {
             contents: 'Another blah result'.split(''),
             renderOptions: { accents: makeAccents(8, 11) },
-            fn: () => null
+            fn: () => null,
+            yank_fn: () => null,
           },
         ];
       });
