@@ -12,6 +12,8 @@ export type MenuResult = {
 
   // called when selected
   fn: any; // TODO
+  // called when yanked
+  yank_fn?: any; // TODO
 
   // props for rendering LineComponent
   renderOptions?: {
@@ -84,5 +86,13 @@ export default class Menu {
     }
     const result = this.results[this.selection];
     await result.fn();
+  }
+
+  public async yank() {
+    if (!this.results.length) {
+      return;
+    }
+    const result = this.results[this.selection];
+    await result.yank_fn();
   }
 }

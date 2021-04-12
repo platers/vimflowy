@@ -188,6 +188,7 @@ export const SEARCH_MODE_MAPPINGS: HotkeyMapping = Object.assign({
   'search-delete-char-after': [['delete']],
   'search-delete-char-before': [['backspace'], ['shift+backspace']],
   'search-select': [['enter']],
+  'search-yank': [['ctrl+y']],
   'search-up': [['ctrl+k'], ['up'], ['shift+tab']],
   'search-down': [['ctrl+j'], ['down'], ['tab']],
 }, _.pick(INSERT_MOTION_MAPPINGS, SINGLE_LINE_MOTIONS));
