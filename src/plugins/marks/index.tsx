@@ -181,11 +181,7 @@ export class MarksPlugin {
       },
       key_transforms: [
         async (key, context) => {
-<<<<<<< HEAD
           if (key === 'space') { key = ' '; };
-=======
-          if (key === 'space') { key = ' ';};
->>>>>>> eat
           if (key.length === 1) {
             if (this.markstate === null) {
               throw new Error('Mark state null during key transform');
