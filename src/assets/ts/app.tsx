@@ -449,9 +449,10 @@ $(document).ready(async () => {
   keyEmitter.listen();
   keyEmitter.on('keydown', (key) => {
     keyHandler.queueKey(key);
+    const handledKeys = ['space', 'shift+space'];
     // NOTE: this is just a best guess... e.g. the mode could be wrong
     // problem is that we process asynchronously, but need to return synchronously
-    return keyBindings.bindings[session.mode].getKey(key) != null || (session.mode === 'INSERT' && key === 'space');
+    return keyBindings.bindings[session.mode].getKey(key) != null || (session.mode === 'INSERT' && handledKeys.includes(key));
   });
 
   keyHandler.on('handledKey', renderMain); // fire and forget
