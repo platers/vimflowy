@@ -243,11 +243,11 @@ export default class BlockComponent extends React.Component<BlockProps, {}> {
         const parents = cachedChild.parentRows;
         // NOTE: this is not actually correct!
         // should use isClone, which is different since a parent may be detached
-        if (parents.length > 1) {
-          cloneIcon = (
-            <i key='clone' className='fa fa-clone bullet clone-icon' title='Cloned'/>
-          );
-        }
+        // if (parents.length > 1) {
+        //   cloneIcon = (
+        //     <i key='clone' className='fa fa-clone bullet clone-icon' title='Cloned'/>
+        //   );
+        // }
 
         const style: React.CSSProperties = {};
 
